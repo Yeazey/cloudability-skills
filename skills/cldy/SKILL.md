@@ -9,7 +9,7 @@ Load this skill at the start of any session involving Cloudability data. It prov
 
 ## 🔥 Active Priority: Agentic FinOps
 
-Read `/Users/kingyeazey/.kiro/skills/cldy/AGENTIC-FINOPS-PLAN.md` — this is the primary initiative. It defines the architecture for building a proactive, multi-agent FinOps system using Cloudability MCP + Slack + Jira + PagerDuty + Terraform MCP servers. Key context:
+See the [`finops-agent/`](../finops-agent/) folder for the full plan, architecture, and workflows. This is the primary initiative — building a proactive, multi-agent FinOps system using Cloudability MCP + Slack + Jira + PagerDuty + Terraform MCP servers. Key context:
 
 - **Google's 5-Layer Reference Architecture** adapted for Cloudability
 - **4-Phase Roadmap**: Single-agent → Multi-agent ticketing → Remediation loop → Policy governance
@@ -18,24 +18,6 @@ Read `/Users/kingyeazey/.kiro/skills/cldy/AGENTIC-FINOPS-PLAN.md` — this is th
 - **External MCP servers**: Atlassian, Slack, PagerDuty, Terraform, GitHub — all confirmed production-ready
 
 When working on any Cloudability feature, consider how it fits into the Agentic FinOps roadmap.
-
-### Slack Integration (VALIDATED ✅)
-
-- **Workspace**: Seto Cloudability Integrations (`YOUR_SLACK_WORKSPACE.slack.com`)
-- **Bot user**: `cloudability_alerts` (User ID: `YOUR_SLACK_USER_ID`, Bot ID: `YOUR_SLACK_BOT_ID`)
-- **Channel**: `YOUR_SLACK_CHANNEL_ID` — **all FinOps posts go here**
-- **MCP Config**: `~/.kiro/settings/mcp.json` → `slack` entry
-- **Auth**: `SLACK_MCP_XOXB_TOKEN` env var (bot token, `xoxb-` prefix)
-- **Scopes confirmed**: `chat:write` (can post), missing `channels:read` (cannot list channels)
-- **Status**: Connected and posting successfully as of 2026-06-29
-
-To post to Slack:
-```bash
-SLACK_TOKEN=$(cat ~/.kiro/settings/mcp.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['mcpServers']['slack']['env']['SLACK_MCP_XOXB_TOKEN'])")
-curl -s -X POST -H "Authorization: Bearer $SLACK_TOKEN" -H "Content-Type: application/json" \
-  -d '{"channel":"YOUR_SLACK_CHANNEL_ID","text":"message here"}' \
-  "https://slack.com/api/chat.postMessage"
-```
 
 ## Architecture Reference
 

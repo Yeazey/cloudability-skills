@@ -85,7 +85,7 @@ The article defines a paradigm shift from reactive dashboards to:
 | Capability | Status |
 |------------|--------|
 | CLI/Chat interface | ✅ Kiro CLI (current) |
-| Slack delivery | ✅ **VALIDATED** — Bot `cloudability_alerts` posting to `YOUR_SLACK_CHANNEL_ID` in Seto Cloudability Integrations workspace |
+| Slack delivery | ✅ **VALIDATED** — Slack MCP bot posting to designated channel |
 | Jira ticket creation | ✅ Atlassian MCP Server exists (official) |
 | PagerDuty alerting | ✅ PagerDuty MCP Server exists (official) |
 
@@ -302,15 +302,8 @@ The article defines a paradigm shift from reactive dashboards to:
 | Connect Cloudability MCP to orchestrator | Done | Cloudability API access | ✅ Done |
 | Build FinOps-expert system prompts | 2-3 days | Domain knowledge | ✅ Done (cldy skill) |
 | Create daily standup workflow | 1 week | Slack workspace admin | ✅ Done (cldy-dash checkin) |
-| Add Slack MCP for delivery | 3-5 days | Slack MCP partner app setup | ✅ Done — Channel `YOUR_SLACK_CHANNEL_ID` validated 2026-06-29 |
+| Add Slack MCP for delivery | 3-5 days | Slack MCP partner app setup | ✅ Done — Validated 2026-06-29 |
 | Testing & iteration | 1 week | Sample queries, golden dataset | 🟡 In progress |
-
-**Slack Config (Validated):**
-- Workspace: `YOUR_SLACK_WORKSPACE.slack.com` (Seto Cloudability Integrations)
-- Bot: `cloudability_alerts` (YOUR_SLACK_USER_ID / YOUR_SLACK_BOT_ID)
-- Channel: `YOUR_SLACK_CHANNEL_ID` (all FinOps posts)
-- Token: `SLACK_MCP_XOXB_TOKEN` in `~/.kiro/settings/mcp.json` → `slack.env`
-- Scopes: `chat:write` confirmed working; missing `channels:read`
 
 **Deliverable:** Agent that produces daily FinOps briefings, answers ad-hoc cost questions, and delivers via Slack.
 
