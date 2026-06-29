@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "cldy-mcp-local": {
+            "command": "cldy-mcp-local",
+            "args": [],
+            "env": {
+                "CLOUDABILITY_OPEN_TOKEN": "${CLOUDABILITY_OPEN_TOKEN}",
+                "CLOUDABILITY_ENVIRONMENT_ID": "${CLOUDABILITY_ENVIRONMENT_ID}"
+            }
+        }
+    }
+}
