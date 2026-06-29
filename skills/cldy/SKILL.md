@@ -7,6 +7,18 @@ description: Load full Cloudability MCP context — environments, auth, tools, w
 
 Load this skill at the start of any session involving Cloudability data. It provides full context on the MCP setup, environments, available tools, and established workflows.
 
+## 🔥 Active Priority: Agentic FinOps
+
+Read `/Users/kingyeazey/.kiro/skills/cldy/AGENTIC-FINOPS-PLAN.md` — this is the primary initiative. It defines the architecture for building a proactive, multi-agent FinOps system using Cloudability MCP + Slack + Jira + PagerDuty + Terraform MCP servers. Key context:
+
+- **Google's 5-Layer Reference Architecture** adapted for Cloudability
+- **4-Phase Roadmap**: Single-agent → Multi-agent ticketing → Remediation loop → Policy governance
+- **5 Workflow Patterns**: Anomaly triage, budget breach prevention, monthly close, rightsizing pipeline, tagging governance
+- **Capability gaps identified**: No event-driven triggers, no policy RAG, no infrastructure write-back (yet)
+- **External MCP servers**: Atlassian, Slack, PagerDuty, Terraform, GitHub — all confirmed production-ready
+
+When working on any Cloudability feature, consider how it fits into the Agentic FinOps roadmap.
+
 ## Architecture Reference
 
 Read `/Users/kingyeazey/.kiro/skills/cldy/ARCHITECTURE.md` for design decisions, rationale, and how the system works together.
