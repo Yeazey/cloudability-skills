@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #1a1a4e, #24243e);
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .header {
+            background: rgba(255,255,255,0.03);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 1.2rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            background: linear-gradient(90deg, #64ffda, #48c6ef);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .meta {
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .nav {
+            display: flex;
+            gap: 0;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 0 2rem;
+        }
+        .nav button {
+            background: none;
+            border: none;
+            color: #888;
+            padding: 1rem 1.5rem;
+            font-size: 0.9rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        .nav button:hover { color: #ccc; }
+        .nav button.active {
+            color: #64ffda;
+            border-bottom-color: #64ffda;
+        }
+        .tab-content { display: none; padding: 2rem; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.2rem;
+            margin-bottom: 2rem;
+        }
+        .kpi-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        .kpi-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 0.5rem; }
+        .kpi-card .value { font-size: 1.8rem; font-weight: 700; color: #fff; }
+        .kpi-card .value.green { color: #64ffda; }
+        .kpi-card .value.coral { color: #ff6b6b; }
+        .kpi-card .value.blue { color: #48c6ef; }
+        .kpi-card .value.purple { color: #a855f7; }
+        .kpi-card .value.orange { color: #ff9900; }
+        .kpi-card .sub { font-size: 0.75rem; color: #666; margin-top: 0.3rem; }
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .chart-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        .chart-box h3 {
+            font-size: 0.9rem;
+            color: #aaa;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+        .chart-box canvas { max-height: 300px; }
+        .chart-box.full-width { grid-column: 1 / -1; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            font-size: 0.85rem;
+        }
+        th { color: #888; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.7rem; }
+        td { color: #ddd; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .badge-aws { background: rgba(255,153,0,0.2); color: #ff9900; }
+        .badge-oci { background: rgba(255,0,0,0.15); color: #f44; }
+        .badge-azure { background: rgba(0,120,212,0.2); color: #4da6ff; }
+        .badge-gcp { background: rgba(52,168,83,0.2); color: #34a853; }
+        .badge-snowflake { background: rgba(41,128,185,0.2); color: #29b5e8; }
+        .badge-databricks { background: rgba(255,63,52,0.2); color: #ff3f34; }
+        .badge-mongodb { background: rgba(0,237,100,0.2); color: #00ed64; }
+        .savings-callout {
+            background: linear-gradient(135deg, rgba(100,255,218,0.1), rgba(72,198,239,0.05));
+            border: 1px solid rgba(100,255,218,0.3);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin: 2rem 0;
+        }
+        .savings-callout .amount { font-size: 2.5rem; font-weight: 700; color: #64ffda; }
+        .savings-callout .desc { color: #888; margin-top: 0.5rem; }
+        .progress-bar {
+            height: 8px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        .progress-bar .fill { height: 100%; border-radius: 4px; transition: width 0.6s; }
+        .fill-green { background: linear-gradient(90deg, #64ffda, #48c6ef); }
+        .fill-coral { background: linear-gradient(90deg, #ff6b6b, #ff8e53); }
+        .fill-blue { background: linear-gradient(90deg, #48c6ef, #6366f1); }
+        .fill-purple { background: linear-gradient(90deg, #a855f7, #6366f1); }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #ccc;
+            margin-bottom: 1.2rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        {% block extra_styles %}{% endblock %}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ header_icon }} {{ header_title }}</h1>
+        <div class="meta">{{ meta_line }}</div>
+    </div>
+    {% if tabs %}
+    <div class="nav">
+        {% for tab in tabs %}
+        <button {% if loop.first %}class="active"{% endif %} onclick="switchTab('{{ tab.id }}')">{{ tab.label }}</button>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+
+    <script>
+    // Tab switching
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    // Chart.js defaults
+    Chart.defaults.color = '#999';
+    Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Utility: format currency
+    function fmtCurrency(v) {
+        if (Math.abs(v) >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
+        if (Math.abs(v) >= 1000) return '$' + (v/1000).toFixed(0) + 'K';
+        return '$' + v.toFixed(0);
+    }
+
+    {% block scripts %}{% endblock %}
+    </script>
+</body>
+</html>

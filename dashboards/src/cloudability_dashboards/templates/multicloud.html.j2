@@ -1,0 +1,677 @@
+{% extends 'base.html.j2' %}
+
+{% macro currency(val) %}${{ '{:,.0f}'.format(val) }}{% endmacro %}
+{% macro pct(val, total) %}{{ '{:.1f}'.format((val / total * 100) if total > 0 else 0) }}%{% endmacro %}
+
+{% block content %}
+<!-- ═══════════════════════════════════════════════════════════════════
+     PROVIDERS TAB
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="tab-providers" class="tab-panel active">
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Cloud Spend</div>
+      <div class="kpi-value">{{ currency(total_spend) }}</div>
+      <div class="kpi-sub">Current Month</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Cloud Providers</div>
+      <div class="kpi-value">{{ vendor_breakdown | length }}</div>
+      <div class="kpi-sub">Active vendors</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Top Provider</div>
+      <div class="kpi-value">{{ vendor_breakdown[0].vendor if vendor_breakdown else 'N/A' }}</div>
+      <div class="kpi-sub">{{ currency(vendor_breakdown[0].cost) if vendor_breakdown else '$0' }} ({{ '{:.1f}'.format(vendor_breakdown[0].pct) if vendor_breakdown else '0' }}%)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Multi-Cloud Index</div>
+      <div class="kpi-value">{{ '{:.2f}'.format(1 - (vendor_breakdown[0].pct / 100)**2 - (vendor_breakdown[1].pct / 100)**2 if vendor_breakdown | length > 1 else 0) }}</div>
+      <div class="kpi-sub">Diversification score</div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="charts-row">
+    <div class="chart-container chart-half">
+      <h3 class="chart-title">Provider Cost Distribution</h3>
+      <div class="chart-wrapper">
+        <canvas id="vendorDonutChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-container chart-half">
+      <h3 class="chart-title">Spend by Provider</h3>
+      <div class="chart-wrapper">
+        <canvas id="vendorBarChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vendor Table -->
+  <div class="table-container">
+    <h3 class="chart-title">Provider Breakdown</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Provider</th>
+          <th class="text-right">Cost</th>
+          <th class="text-right">% of Total</th>
+          <th>Share</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in vendor_breakdown %}
+        <tr>
+          <td>
+            <span class="vendor-badge vendor-{{ v.vendor | lower | replace(' ', '-') }}">{{ v.vendor }}</span>
+          </td>
+          <td class="text-right">{{ currency(v.cost) }}</td>
+          <td class="text-right">{{ '{:.1f}'.format(v.pct) }}%</td>
+          <td>
+            <div class="progress-bar">
+              <div class="progress-fill vendor-bg-{{ v.vendor | lower | replace(' ', '-') }}" style="width: {{ v.pct }}%"></div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SERVICE TYPES TAB
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="tab-services" class="tab-panel">
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">IaaS</div>
+      <div class="kpi-value kpi-iaas">{{ currency(service_types.iaas) }}</div>
+      <div class="kpi-sub">{{ pct(service_types.iaas, service_type_total) }} of total</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">PaaS</div>
+      <div class="kpi-value kpi-paas">{{ currency(service_types.paas) }}</div>
+      <div class="kpi-sub">{{ pct(service_types.paas, service_type_total) }} of total</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Containers</div>
+      <div class="kpi-value kpi-containers">{{ currency(service_types.containers) }}</div>
+      <div class="kpi-sub">{{ pct(service_types.containers, service_type_total) }} of total</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">AI / ML</div>
+      <div class="kpi-value kpi-ai">{{ currency(service_types.ai) }}</div>
+      <div class="kpi-sub">{{ pct(service_types.ai, service_type_total) }} of total</div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="charts-row">
+    <div class="chart-container chart-half">
+      <h3 class="chart-title">Service Type Distribution</h3>
+      <div class="chart-wrapper">
+        <canvas id="serviceDonutChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-container chart-half">
+      <h3 class="chart-title">Service Type Breakdown</h3>
+      <div class="chart-wrapper">
+        <canvas id="serviceBarChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Services Table -->
+  <div class="table-container">
+    <h3 class="chart-title">Top Services</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Provider</th>
+          <th>Category</th>
+          <th class="text-right">Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for svc in top_services %}
+        <tr>
+          <td>{{ svc.name }}</td>
+          <td><span class="vendor-badge vendor-{{ svc.vendor | lower | replace(' ', '-') }}">{{ svc.vendor }}</span></td>
+          <td><span class="category-badge cat-{{ svc.category | lower }}">{{ svc.category }}</span></td>
+          <td class="text-right">{{ currency(svc.cost) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHIP ARCHITECTURE TAB
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="tab-chips" class="tab-panel">
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Intel (x86)</div>
+      <div class="kpi-value kpi-intel">{{ currency(chip_breakdown.get('Intel', 0)) }}</div>
+      <div class="kpi-sub">{{ pct(chip_breakdown.get('Intel', 0), chip_total) }} of compute</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">AMD (x86)</div>
+      <div class="kpi-value kpi-amd">{{ currency(chip_breakdown.get('AMD', 0)) }}</div>
+      <div class="kpi-sub">{{ pct(chip_breakdown.get('AMD', 0), chip_total) }} of compute</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Graviton (ARM)</div>
+      <div class="kpi-value kpi-graviton">{{ currency(chip_breakdown.get('Graviton (ARM)', 0)) }}</div>
+      <div class="kpi-sub">{{ pct(chip_breakdown.get('Graviton (ARM)', 0), chip_total) }} of compute</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">NVIDIA GPU</div>
+      <div class="kpi-value kpi-gpu">{{ currency(chip_breakdown.get('NVIDIA GPU', 0)) }}</div>
+      <div class="kpi-sub">{{ pct(chip_breakdown.get('NVIDIA GPU', 0), chip_total) }} of compute</div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="charts-row">
+    <div class="chart-container chart-half">
+      <h3 class="chart-title">Chip Architecture Distribution</h3>
+      <div class="chart-wrapper">
+        <canvas id="chipDonutChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-container chart-half">
+      <h3 class="chart-title">Compute Spend by Architecture</h3>
+      <div class="chart-wrapper">
+        <canvas id="chipBarChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chip Table -->
+  <div class="table-container">
+    <h3 class="chart-title">Architecture Breakdown</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Architecture</th>
+          <th class="text-right">Cost</th>
+          <th class="text-right">% of Compute</th>
+          <th>Share</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for arch, cost in chip_breakdown.items() %}
+        <tr>
+          <td><span class="chip-badge chip-{{ arch | lower | replace(' ', '-') | replace('(', '') | replace(')', '') | replace('/', '-') }}">{{ arch }}</span></td>
+          <td class="text-right">{{ currency(cost) }}</td>
+          <td class="text-right">{{ pct(cost, chip_total) }}</td>
+          <td>
+            <div class="progress-bar">
+              <div class="progress-fill chip-bg-{{ arch | lower | replace(' ', '-') | replace('(', '') | replace(')', '') | replace('/', '-') }}" style="width: {{ '{:.1f}'.format((cost / chip_total * 100) if chip_total > 0 else 0) }}%"></div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+/* ─── KPI Cards ─── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.kpi-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 1.25rem;
+  text-align: center;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.kpi-card:hover {
+  border-color: rgba(255,255,255,0.2);
+  transform: translateY(-2px);
+}
+.kpi-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 0.5rem;
+}
+.kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+}
+.kpi-sub {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.4);
+  margin-top: 0.25rem;
+}
+
+/* KPI color accents */
+.kpi-iaas { color: #48c6ef; }
+.kpi-paas { color: #a855f7; }
+.kpi-containers { color: #64ffda; }
+.kpi-ai { color: #ff6b6b; }
+.kpi-intel { color: #0071c5; }
+.kpi-amd { color: #ed1c24; }
+.kpi-graviton { color: #ff9900; }
+.kpi-gpu { color: #76b900; }
+
+/* ─── Charts ─── */
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.chart-container {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+.chart-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  margin: 0 0 1rem 0;
+}
+.chart-wrapper {
+  position: relative;
+  height: 280px;
+}
+.chart-wrapper canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ─── Tables ─── */
+.table-container {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.5);
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  text-align: left;
+}
+.data-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.85);
+}
+.data-table tbody tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+.text-right { text-align: right; }
+
+/* ─── Progress Bars ─── */
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* Vendor colors */
+.vendor-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.vendor-aws, .vendor-badge.vendor-aws { background: rgba(255,153,0,0.15); color: #ff9900; }
+.vendor-azure, .vendor-badge.vendor-azure { background: rgba(0,120,212,0.15); color: #0078d4; }
+.vendor-gcp, .vendor-badge.vendor-gcp { background: rgba(52,168,83,0.15); color: #34a853; }
+.vendor-oci, .vendor-badge.vendor-oci { background: rgba(244,67,54,0.15); color: #f44336; }
+.vendor-snowflake, .vendor-badge.vendor-snowflake { background: rgba(41,181,232,0.15); color: #29b5e8; }
+.vendor-databricks, .vendor-badge.vendor-databricks { background: rgba(255,63,52,0.15); color: #ff3f34; }
+.vendor-mongodb, .vendor-badge.vendor-mongodb { background: rgba(0,237,100,0.15); color: #00ed64; }
+
+.vendor-bg-aws { background: #ff9900; }
+.vendor-bg-azure { background: #0078d4; }
+.vendor-bg-gcp { background: #34a853; }
+.vendor-bg-oci { background: #f44336; }
+.vendor-bg-snowflake { background: #29b5e8; }
+.vendor-bg-databricks { background: #ff3f34; }
+.vendor-bg-mongodb { background: #00ed64; }
+
+/* Category badges */
+.category-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.cat-iaas { background: rgba(72,198,239,0.15); color: #48c6ef; }
+.cat-paas { background: rgba(168,85,247,0.15); color: #a855f7; }
+.cat-containers { background: rgba(100,255,218,0.15); color: #64ffda; }
+.cat-ai { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+.cat-other { background: rgba(102,102,102,0.15); color: #999; }
+
+/* Chip badges */
+.chip-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.chip-intel { background: rgba(0,113,197,0.15); color: #0071c5; }
+.chip-amd { background: rgba(237,28,36,0.15); color: #ed1c24; }
+.chip-graviton-arm { background: rgba(255,153,0,0.15); color: #ff9900; }
+.chip-nvidia-gpu { background: rgba(118,185,0,0.15); color: #76b900; }
+.chip-arm-ampere { background: rgba(0,145,189,0.15); color: #0091bd; }
+.chip-other-unknown { background: rgba(102,102,102,0.15); color: #999; }
+
+.chip-bg-intel { background: #0071c5; }
+.chip-bg-amd { background: #ed1c24; }
+.chip-bg-graviton-arm { background: #ff9900; }
+.chip-bg-nvidia-gpu { background: #76b900; }
+.chip-bg-arm-ampere { background: #0091bd; }
+.chip-bg-other-unknown { background: #666; }
+
+/* ─── Tab Panels ─── */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .charts-row { grid-template-columns: 1fr; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // ─── Data ───
+  const vendorData = {{ vendor_breakdown | tojson }};
+  const serviceTypes = {{ service_types | tojson }};
+  const serviceTypeTotal = {{ service_type_total }};
+  const chipBreakdown = {{ chip_breakdown | tojson }};
+  const chipTotal = {{ chip_total }};
+
+  // ─── Color Maps ───
+  const vendorColors = {
+    'AWS': '#ff9900',
+    'Azure': '#0078d4',
+    'GCP': '#34a853',
+    'OCI': '#f44336',
+    'Snowflake': '#29b5e8',
+    'Databricks': '#ff3f34',
+    'MongoDB': '#00ed64'
+  };
+  const serviceColors = {
+    'iaas': '#48c6ef',
+    'paas': '#a855f7',
+    'containers': '#64ffda',
+    'ai': '#ff6b6b',
+    'other': '#666666'
+  };
+  const chipColors = {
+    'Intel': '#0071c5',
+    'AMD': '#ed1c24',
+    'Graviton (ARM)': '#ff9900',
+    'NVIDIA GPU': '#76b900',
+    'ARM (Ampere)': '#0091bd',
+    'Other/Unknown': '#666666'
+  };
+
+  // ─── Chart.js Defaults ───
+  Chart.defaults.color = 'rgba(255,255,255,0.7)';
+  Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+  Chart.defaults.plugins.legend.labels.boxWidth = 12;
+  Chart.defaults.plugins.legend.labels.padding = 16;
+
+  const tooltipConfig = {
+    backgroundColor: 'rgba(20,20,30,0.95)',
+    titleColor: '#fff',
+    bodyColor: 'rgba(255,255,255,0.8)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    padding: 12,
+    cornerRadius: 8,
+    callbacks: {
+      label: function(ctx) {
+        const val = ctx.parsed !== undefined ? (ctx.parsed.x || ctx.parsed) : ctx.raw;
+        return ' ' + ctx.label + ': $' + Number(val).toLocaleString();
+      }
+    }
+  };
+
+  // ─── PROVIDERS: Donut Chart ───
+  const vLabels = vendorData.map(v => v.vendor);
+  const vValues = vendorData.map(v => v.cost);
+  const vColors = vLabels.map(l => vendorColors[l] || '#888');
+
+  new Chart(document.getElementById('vendorDonutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: vLabels,
+      datasets: [{
+        data: vValues,
+        backgroundColor: vColors,
+        borderWidth: 0,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'right' },
+        tooltip: tooltipConfig
+      }
+    }
+  });
+
+  // ─── PROVIDERS: Horizontal Bar Chart ───
+  new Chart(document.getElementById('vendorBarChart'), {
+    type: 'bar',
+    data: {
+      labels: vLabels,
+      datasets: [{
+        data: vValues,
+        backgroundColor: vColors,
+        borderRadius: 4,
+        barThickness: 24
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltipConfig
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            callback: function(v) { return '$' + (v / 1000).toFixed(0) + 'k'; }
+          }
+        },
+        y: {
+          grid: { display: false }
+        }
+      }
+    }
+  });
+
+  // ─── SERVICE TYPES: Donut Chart ───
+  const sLabels = ['IaaS', 'PaaS', 'Containers', 'AI/ML', 'Other'];
+  const sKeys = ['iaas', 'paas', 'containers', 'ai', 'other'];
+  const sValues = sKeys.map(k => serviceTypes[k] || 0);
+  const sColors = sKeys.map(k => serviceColors[k]);
+
+  new Chart(document.getElementById('serviceDonutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: sLabels,
+      datasets: [{
+        data: sValues,
+        backgroundColor: sColors,
+        borderWidth: 0,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'right' },
+        tooltip: tooltipConfig
+      }
+    }
+  });
+
+  // ─── SERVICE TYPES: Bar Chart ───
+  new Chart(document.getElementById('serviceBarChart'), {
+    type: 'bar',
+    data: {
+      labels: sLabels,
+      datasets: [{
+        data: sValues,
+        backgroundColor: sColors,
+        borderRadius: 4,
+        barThickness: 32
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltipConfig
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            callback: function(v) { return '$' + (v / 1000).toFixed(0) + 'k'; }
+          }
+        }
+      }
+    }
+  });
+
+  // ─── CHIP ARCHITECTURE: Donut Chart ───
+  const cLabels = Object.keys(chipBreakdown);
+  const cValues = Object.values(chipBreakdown);
+  const cColors = cLabels.map(l => chipColors[l] || '#888');
+
+  new Chart(document.getElementById('chipDonutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: cLabels,
+      datasets: [{
+        data: cValues,
+        backgroundColor: cColors,
+        borderWidth: 0,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'right' },
+        tooltip: tooltipConfig
+      }
+    }
+  });
+
+  // ─── CHIP ARCHITECTURE: Horizontal Bar Chart ───
+  new Chart(document.getElementById('chipBarChart'), {
+    type: 'bar',
+    data: {
+      labels: cLabels,
+      datasets: [{
+        data: cValues,
+        backgroundColor: cColors,
+        borderRadius: 4,
+        barThickness: 24
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltipConfig
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            callback: function(v) { return '$' + (v / 1000).toFixed(0) + 'k'; }
+          }
+        },
+        y: {
+          grid: { display: false }
+        }
+      }
+    }
+  });
+
+  // ─── Tab Switching ───
+  document.querySelectorAll('[data-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const tabId = this.getAttribute('data-tab');
+      // Deactivate all
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('[data-tab]').forEach(b => b.classList.remove('active'));
+      // Activate selected
+      document.getElementById('tab-' + tabId).classList.add('active');
+      this.classList.add('active');
+    });
+  });
+});
+</script>
+{% endblock %}

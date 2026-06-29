@@ -1,0 +1,410 @@
+{% extends 'base.html.j2' %}
+
+{% macro currency(val) %}${{ '{:,.0f}'.format(val) }}{% endmacro %}
+
+{% block extra_styles %}
+.commitment-table tr:hover { background: rgba(255,255,255,0.03); }
+.vendor-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-row .stat-label { color: #aaa; font-size: 0.85rem; }
+.stat-row .stat-value { color: #fff; font-weight: 600; font-size: 0.9rem; }
+.optimization-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+}
+.opt-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 1.8rem;
+    text-align: center;
+}
+.opt-card .opt-value { font-size: 2rem; font-weight: 700; margin-bottom: 0.3rem; }
+.opt-card .opt-label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+.comparison-positive { color: #ff6b6b; }
+.comparison-negative { color: #64ffda; }
+{% endblock %}
+
+{% block content %}
+<!-- OVERVIEW TAB -->
+<div id="tab-overview" class="tab-content active">
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="label">Total Spend (MTD)</div>
+            <div class="value green">{{ currency(total_spend) }}</div>
+            <div class="sub">Current billing period</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Month-over-Month Change</div>
+            <div class="value {{ 'green' if mom_change_pct <= 0 else 'coral' }}">
+                {{ '{:+.1f}'.format(mom_change_pct) }}%
+            </div>
+            <div class="sub">vs. previous month ({{ currency(previous_total) }})</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Rightsizing Savings</div>
+            <div class="value coral">{{ currency(rightsizing_savings) }}</div>
+            <div class="sub">{{ rightsizing_count }} recommendations available</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Active Anomalies</div>
+            <div class="value blue">{{ anomaly_count }}</div>
+            <div class="sub">Detected this period</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Budget Health</div>
+            {% set healthy = budget_status.total - budget_status.at_risk - budget_status.exceeded %}
+            <div class="value {{ 'green' if budget_status.exceeded == 0 else 'coral' }}">
+                {{ healthy }}/{{ budget_status.total }}
+            </div>
+            <div class="sub">
+                {% if budget_status.at_risk > 0 %}{{ budget_status.at_risk }} at risk{% endif %}
+                {% if budget_status.exceeded > 0 %}{% if budget_status.at_risk > 0 %} · {% endif %}{{ budget_status.exceeded }} exceeded{% endif %}
+                {% if budget_status.at_risk == 0 and budget_status.exceeded == 0 %}All budgets healthy{% endif %}
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Commitment Savings</div>
+            <div class="value green">{{ currency(commitment_savings) }}</div>
+            <div class="sub">RI/SP coverage savings</div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-box">
+            <h3>Top 10 Accounts by Spend</h3>
+            <canvas id="chart-accounts"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>Monthly Cost Trend</h3>
+            <canvas id="chart-monthly-trend"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- SERVICES TAB -->
+<div id="tab-services" class="tab-content">
+    <div class="chart-grid">
+        <div class="chart-box full-width">
+            <h3>Top Services by Cost</h3>
+            <canvas id="chart-services"></canvas>
+        </div>
+    </div>
+
+    <div class="section-title">Service Cost Breakdown</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Service</th>
+                <th>Vendor</th>
+                <th style="text-align:right">Cost</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for svc in top_services %}
+            <tr>
+                <td>{{ svc.name }}</td>
+                <td>
+                    {% set vendor_lower = svc.vendor|lower %}
+                    <span class="badge badge-{{ vendor_lower }}">{{ svc.vendor }}</span>
+                </td>
+                <td style="text-align:right">{{ currency(svc.cost) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- OPTIMIZATION TAB -->
+<div id="tab-optimization" class="tab-content">
+    <div class="savings-callout">
+        <div class="amount">{{ currency(rightsizing_savings) }}</div>
+        <div class="desc">Total potential annual savings from rightsizing recommendations</div>
+    </div>
+
+    <div class="optimization-grid">
+        <div class="opt-card">
+            <div class="opt-value coral">{{ rightsizing_count }}</div>
+            <div class="opt-label">Rightsizing Recommendations</div>
+        </div>
+        <div class="opt-card">
+            <div class="opt-value blue">{{ anomaly_count }}</div>
+            <div class="opt-label">Active Anomalies</div>
+        </div>
+        <div class="opt-card">
+            <div class="opt-value green">{{ currency(commitment_savings) }}</div>
+            <div class="opt-label">Commitment Savings</div>
+        </div>
+    </div>
+
+    <div class="section-title">Commitment Coverage Details</div>
+    <table class="commitment-table">
+        <thead>
+            <tr>
+                <th>Lease Type</th>
+                <th>Vendor</th>
+                <th style="text-align:right">Amortized</th>
+                <th style="text-align:right">On-Demand</th>
+                <th style="text-align:right">Unblended</th>
+                <th style="text-align:right">Savings</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in commitment_data %}
+            <tr>
+                <td>{{ row.lease_type }}</td>
+                <td>
+                    {% set vendor_lower = row.vendor|lower %}
+                    <span class="badge badge-{{ vendor_lower }}">{{ row.vendor }}</span>
+                </td>
+                <td style="text-align:right">{{ currency(row.amortized) }}</td>
+                <td style="text-align:right">{{ currency(row.on_demand) }}</td>
+                <td style="text-align:right">{{ currency(row.unblended) }}</td>
+                <td style="text-align:right; color:#64ffda">{{ currency(row.on_demand - row.amortized) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- TRENDS TAB -->
+<div id="tab-trends" class="tab-content">
+    <div class="chart-grid">
+        <div class="chart-box full-width">
+            <h3>12-Month Cost Trend</h3>
+            <canvas id="chart-full-trend" style="max-height:350px"></canvas>
+        </div>
+    </div>
+
+    <div class="section-title">Top Accounts — Current vs Previous Month</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Account</th>
+                <th style="text-align:right">Current Month</th>
+                <th style="text-align:right">Amortized</th>
+                <th style="text-align:right">Change</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for acct in top_accounts %}
+            <tr>
+                <td>{{ acct.name }}</td>
+                <td style="text-align:right">{{ currency(acct.cost) }}</td>
+                <td style="text-align:right">{{ currency(acct.amortized) }}</td>
+                <td style="text-align:right">
+                    {% if acct.cost > acct.amortized %}
+                    <span class="comparison-positive">▲ {{ currency(acct.cost - acct.amortized) }}</span>
+                    {% elif acct.cost < acct.amortized %}
+                    <span class="comparison-negative">▼ {{ currency(acct.amortized - acct.cost) }}</span>
+                    {% else %}
+                    <span style="color:#888">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+// === DATA INJECTION ===
+const accountsData = {{ top_accounts | tojson }};
+const monthlyData = {{ monthly_trend | tojson }};
+const servicesData = {{ top_services | tojson }};
+
+// === CHART COLORS ===
+const chartColors = {
+    primary: '#64ffda',
+    secondary: '#48c6ef',
+    coral: '#ff6b6b',
+    purple: '#a855f7',
+    orange: '#ff9900',
+    gradient: ['#64ffda', '#48c6ef', '#6366f1', '#a855f7', '#ff6b6b', '#ff9900', '#34a853', '#29b5e8', '#ff3f34', '#4da6ff']
+};
+
+// === TOP ACCOUNTS HORIZONTAL BAR ===
+const ctxAccounts = document.getElementById('chart-accounts').getContext('2d');
+new Chart(ctxAccounts, {
+    type: 'bar',
+    data: {
+        labels: accountsData.slice(0, 10).map(a => a.name.length > 25 ? a.name.substring(0, 25) + '…' : a.name),
+        datasets: [{
+            data: accountsData.slice(0, 10).map(a => a.cost),
+            backgroundColor: chartColors.gradient.slice(0, 10).map(c => c + '40'),
+            borderColor: chartColors.gradient.slice(0, 10),
+            borderWidth: 1,
+            borderRadius: 4
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => fmtCurrency(ctx.raw)
+                }
+            }
+        },
+        scales: {
+            x: {
+                ticks: { callback: v => fmtCurrency(v) },
+                grid: { color: 'rgba(255,255,255,0.04)' }
+            },
+            y: {
+                grid: { display: false },
+                ticks: { font: { size: 11 } }
+            }
+        }
+    }
+});
+
+// === MONTHLY TREND LINE CHART (Overview) ===
+const ctxTrend = document.getElementById('chart-monthly-trend').getContext('2d');
+const trendGradient = ctxTrend.createLinearGradient(0, 0, 0, 300);
+trendGradient.addColorStop(0, 'rgba(100, 255, 218, 0.3)');
+trendGradient.addColorStop(1, 'rgba(100, 255, 218, 0)');
+
+new Chart(ctxTrend, {
+    type: 'line',
+    data: {
+        labels: monthlyData.map(m => m.month),
+        datasets: [{
+            data: monthlyData.map(m => m.cost),
+            borderColor: chartColors.primary,
+            backgroundColor: trendGradient,
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: chartColors.primary,
+            pointBorderColor: chartColors.primary,
+            pointRadius: 3,
+            pointHoverRadius: 6
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => fmtCurrency(ctx.raw)
+                }
+            }
+        },
+        scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.04)' } },
+            y: {
+                ticks: { callback: v => fmtCurrency(v) },
+                grid: { color: 'rgba(255,255,255,0.04)' }
+            }
+        }
+    }
+});
+
+// === TOP SERVICES BAR CHART ===
+const ctxServices = document.getElementById('chart-services').getContext('2d');
+new Chart(ctxServices, {
+    type: 'bar',
+    data: {
+        labels: servicesData.map(s => s.name.length > 30 ? s.name.substring(0, 30) + '…' : s.name),
+        datasets: [{
+            data: servicesData.map(s => s.cost),
+            backgroundColor: servicesData.map((s, i) => chartColors.gradient[i % chartColors.gradient.length] + '60'),
+            borderColor: servicesData.map((s, i) => chartColors.gradient[i % chartColors.gradient.length]),
+            borderWidth: 1,
+            borderRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => fmtCurrency(ctx.raw)
+                }
+            }
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: { font: { size: 10 }, maxRotation: 45 }
+            },
+            y: {
+                ticks: { callback: v => fmtCurrency(v) },
+                grid: { color: 'rgba(255,255,255,0.04)' }
+            }
+        }
+    }
+});
+
+// === FULL TREND CHART (Trends tab) ===
+const ctxFullTrend = document.getElementById('chart-full-trend').getContext('2d');
+const fullTrendGradient = ctxFullTrend.createLinearGradient(0, 0, 0, 350);
+fullTrendGradient.addColorStop(0, 'rgba(100, 255, 218, 0.25)');
+fullTrendGradient.addColorStop(1, 'rgba(100, 255, 218, 0)');
+
+new Chart(ctxFullTrend, {
+    type: 'line',
+    data: {
+        labels: monthlyData.map(m => m.month),
+        datasets: [{
+            label: 'Monthly Cost',
+            data: monthlyData.map(m => m.cost),
+            borderColor: chartColors.primary,
+            backgroundColor: fullTrendGradient,
+            fill: true,
+            tension: 0.35,
+            pointBackgroundColor: chartColors.primary,
+            pointBorderColor: '#0f0c29',
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 7
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => '  ' + fmtCurrency(ctx.raw)
+                }
+            }
+        },
+        scales: {
+            x: {
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                ticks: { font: { size: 11 } }
+            },
+            y: {
+                ticks: { callback: v => fmtCurrency(v) },
+                grid: { color: 'rgba(255,255,255,0.04)' }
+            }
+        }
+    }
+});
+{% endblock %}

@@ -8,10 +8,10 @@ description: Generate and open the Cloudability Executive Dashboard. Use when th
 When triggered, run the executive dashboard generator and open it in Chrome:
 
 ```bash
-cd /Users/kingyeazey/cloudability-executive-dashboard && npm run generate
+cd /Users/kingyeazey/cloudability-dashboards && uv run cldy-dash executive
 ```
 
-This project lives at `/Users/kingyeazey/cloudability-executive-dashboard/` and is backed by the GitHub repo: https://github.com/Yeazey/executive_cloud_summary_CLDYMCP.git
+This project lives at `/Users/kingyeazey/cloudability-dashboards/` and is the unified Python dashboard CLI.
 
 The dashboard:
 - Connects to Cloudability MCP to pull live cost data
@@ -22,7 +22,7 @@ The dashboard:
 
 ## MCP Data Source
 
-- **Dashboard generation** (`npm run generate`): Uses the Node.js `cloudability` MCP server internally
+- **Dashboard generation** (`uv run cldy-dash executive`): Uses the `cloudability` MCP server internally
 - **Follow-up queries in chat**: Use `cldy-mcp-local` tools directly:
   - `run_cost_report` for cost data
   - `get_rightsizing_recommendations` for optimization

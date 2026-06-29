@@ -6,7 +6,7 @@ Run the multi-agent FinOps daily standup as a conversational markdown report. Us
 
 1. Run the daily check-in and capture JSON output:
    ```bash
-   cd /Users/kingyeazey/cloudability-dailycheckin && node src/main.mjs --json 2>/dev/null
+   cd /Users/kingyeazey/cloudability-dashboards && uv run cldy-dash checkin --json 2>/dev/null
    ```
 
 2. Format the JSON output as a comprehensive markdown report directly in the chat response, organized by FinOps phases:
@@ -50,9 +50,9 @@ A rich markdown standup rendered in chat with:
 
 ## Options
 
-- `npm run checkin` — Standard daily standup (ANSI terminal output for quick scan)
-- `npm run monday` — Extended Monday brief with weekly recap
-- `--json` flag — Output raw JSON for markdown formatting in chat
+- `uv run cldy-dash checkin` — Standard daily standup (markdown terminal output for quick scan)
+- `uv run cldy-dash checkin --monday` — Extended Monday brief with weekly recap
+- `uv run cldy-dash checkin --json` — Output raw JSON for markdown formatting in chat
 
 ## Why Markdown-in-Chat
 

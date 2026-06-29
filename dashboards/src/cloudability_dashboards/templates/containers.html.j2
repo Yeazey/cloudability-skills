@@ -1,0 +1,623 @@
+{% extends 'base.html.j2' %}
+
+{% macro currency(val) %}${{ '{:,.0f}'.format(val) }}{% endmacro %}
+{% macro pct(val) %}{{ '{:.1f}'.format(val) }}%{% endmacro %}
+
+{% block extra_styles %}
+.vendor-donut-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+}
+.vendor-donut-container canvas { max-width: 220px; max-height: 220px; }
+.vendor-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.vendor-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: #ccc;
+}
+.vendor-legend-item .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.idle-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.idle-kpi-card {
+    background: rgba(255,107,107,0.05);
+    border: 1px solid rgba(255,107,107,0.15);
+    border-radius: 12px;
+    padding: 1.2rem;
+    text-align: center;
+}
+.idle-kpi-card .idle-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+    margin-bottom: 0.4rem;
+}
+.idle-kpi-card .idle-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #ff6b6b;
+}
+.idle-kpi-card .idle-sub {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 0.3rem;
+}
+.cluster-table tr:hover { background: rgba(255,255,255,0.03); }
+.badge-vendor {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.badge-amazon { background: rgba(255,153,0,0.2); color: #ff9900; }
+.badge-oci { background: rgba(255,68,68,0.15); color: #f44; }
+.badge-azure { background: rgba(0,120,212,0.2); color: #4da6ff; }
+.badge-gcp { background: rgba(52,168,83,0.2); color: #34a853; }
+.efficiency-meter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.efficiency-meter .bar-bg {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.efficiency-meter .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #64ffda, #48c6ef);
+}
+.efficiency-meter .bar-val {
+    font-size: 0.75rem;
+    color: #aaa;
+    min-width: 3rem;
+    text-align: right;
+}
+{% endblock %}
+
+{% block content %}
+<!-- OVERVIEW TAB -->
+<div id="tab-overview" class="tab-content active">
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="label">Total Container Spend</div>
+            <div class="value green">{{ currency(total_container_spend) }}</div>
+            <div class="sub">Billing-reconciled (CUR/MCA)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Kubecost Allocated</div>
+            <div class="value blue">{{ currency(total_kubecost) }}</div>
+            <div class="sub">Workload-level allocation</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Idle Cost</div>
+            <div class="value coral">{{ currency(total_kubecost * total_idle_pct / 100) }}</div>
+            <div class="sub">{{ pct(total_idle_pct) }} of allocated spend</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Cluster Count</div>
+            <div class="value">{{ cluster_count }}</div>
+            <div class="sub">Active K8s clusters</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Top Cluster</div>
+            <div class="value orange">{{ currency(top_cluster.cost) }}</div>
+            <div class="sub">{{ top_cluster.name }}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Avg Efficiency</div>
+            <div class="value {{ 'green' if avg_efficiency >= 0.6 else 'coral' }}">{{ pct(avg_efficiency * 100) }}</div>
+            <div class="sub">Resource utilization rate</div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-box">
+            <h3>Vendor Split</h3>
+            <div class="vendor-donut-container">
+                <canvas id="vendorDonut" width="220" height="220"></canvas>
+                <div class="vendor-legend" id="vendorLegend"></div>
+            </div>
+        </div>
+        <div class="chart-box">
+            <h3>Spend by Region</h3>
+            <canvas id="regionBar"></canvas>
+        </div>
+        <div class="chart-box full-width">
+            <h3>Kubecost Breakdown by Cluster (CPU / RAM / GPU / Network / PV)</h3>
+            <canvas id="kubecostStacked"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- TOP CLUSTERS TAB -->
+<div id="tab-clusters" class="tab-content">
+    <div class="section-title">Top 20 Clusters by Spend</div>
+    <div class="chart-grid">
+        <div class="chart-box full-width">
+            <canvas id="topClustersBar" height="400"></canvas>
+        </div>
+    </div>
+
+    <div class="section-title">Cluster Detail</div>
+    <div class="chart-box full-width">
+        <table class="cluster-table">
+            <thead>
+                <tr>
+                    <th>Cluster</th>
+                    <th>Vendor</th>
+                    <th>Region</th>
+                    <th>Unblended Cost</th>
+                    <th>Amortized Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in top_clusters %}
+                <tr>
+                    <td>{{ c.name }}</td>
+                    <td>
+                        {% if 'Amazon' in c.vendor or 'AWS' in c.vendor %}
+                            <span class="badge-vendor badge-amazon">AWS</span>
+                        {% elif 'OCI' in c.vendor or 'Oracle' in c.vendor %}
+                            <span class="badge-vendor badge-oci">OCI</span>
+                        {% elif 'Azure' in c.vendor or 'Microsoft' in c.vendor %}
+                            <span class="badge-vendor badge-azure">Azure</span>
+                        {% elif 'GCP' in c.vendor or 'Google' in c.vendor %}
+                            <span class="badge-vendor badge-gcp">GCP</span>
+                        {% else %}
+                            <span class="badge-vendor">{{ c.vendor }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ c.region }}</td>
+                    <td>{{ currency(c.unblended_cost) }}</td>
+                    <td>{{ currency(c.amortized_cost) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- OPTIMIZATION TAB -->
+<div id="tab-optimization" class="tab-content">
+    <div class="savings-callout">
+        <div class="amount">{{ currency(total_kubecost * total_idle_pct / 100) }}</div>
+        <div class="desc">Estimated idle resource cost — potential savings through right-sizing and scaling</div>
+    </div>
+
+    <div class="section-title">Idle Cost by Resource Type</div>
+    <div class="idle-kpi-grid">
+        {% set total_cpu_idle = kubecost_clusters | sum(attribute='cpuCost') * (kubecost_clusters | sum(attribute='cpuIdlePct')) / (kubecost_clusters | length) / 100 if kubecost_clusters else 0 %}
+        {% set total_ram_idle = kubecost_clusters | sum(attribute='ramCost') * (kubecost_clusters | sum(attribute='ramIdlePct')) / (kubecost_clusters | length) / 100 if kubecost_clusters else 0 %}
+        {% set total_gpu_cost = kubecost_clusters | sum(attribute='gpuCost') if kubecost_clusters else 0 %}
+        {% set total_network_cost = kubecost_clusters | sum(attribute='networkCost') if kubecost_clusters else 0 %}
+        <div class="idle-kpi-card">
+            <div class="idle-label">CPU Idle Cost</div>
+            <div class="idle-value">{{ currency(total_cpu_idle) }}</div>
+            <div class="idle-sub">Avg {{ pct((kubecost_clusters | sum(attribute='cpuIdlePct')) / (kubecost_clusters | length) if kubecost_clusters else 0) }} idle</div>
+        </div>
+        <div class="idle-kpi-card">
+            <div class="idle-label">RAM Idle Cost</div>
+            <div class="idle-value">{{ currency(total_ram_idle) }}</div>
+            <div class="idle-sub">Avg {{ pct((kubecost_clusters | sum(attribute='ramIdlePct')) / (kubecost_clusters | length) if kubecost_clusters else 0) }} idle</div>
+        </div>
+        <div class="idle-kpi-card">
+            <div class="idle-label">GPU Cost</div>
+            <div class="idle-value">{{ currency(total_gpu_cost) }}</div>
+            <div class="idle-sub">Total GPU allocation</div>
+        </div>
+        <div class="idle-kpi-card">
+            <div class="idle-label">Network Cost</div>
+            <div class="idle-value">{{ currency(total_network_cost) }}</div>
+            <div class="idle-sub">Cross-zone &amp; egress</div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-box">
+            <h3>Idle vs Utilized (by Cluster)</h3>
+            <canvas id="idleUtilizedBar"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>Efficiency by Cluster</h3>
+            <canvas id="efficiencyBar"></canvas>
+        </div>
+    </div>
+
+    <div class="section-title">Idle Breakdown by Cluster</div>
+    <div class="chart-box full-width">
+        <table class="cluster-table">
+            <thead>
+                <tr>
+                    <th>Cluster</th>
+                    <th>Total Cost</th>
+                    <th>Idle %</th>
+                    <th>CPU Idle %</th>
+                    <th>RAM Idle %</th>
+                    <th>Efficiency</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in kubecost_clusters | sort(attribute='totalIdlePct', reverse=true) %}
+                <tr>
+                    <td>{{ c.name }}</td>
+                    <td>{{ currency(c.totalCost) }}</td>
+                    <td style="color: #ff6b6b;">{{ pct(c.totalIdlePct) }}</td>
+                    <td>{{ pct(c.cpuIdlePct) }}</td>
+                    <td>{{ pct(c.ramIdlePct) }}</td>
+                    <td>
+                        <div class="efficiency-meter">
+                            <div class="bar-bg"><div class="bar-fill" style="width:{{ (c.efficiency * 100) | int }}%"></div></div>
+                            <div class="bar-val">{{ pct(c.efficiency * 100) }}</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- KPIs TAB -->
+<div id="tab-kpis" class="tab-content">
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="label">Cost per Cluster (Avg)</div>
+            <div class="value blue">{{ currency(total_container_spend / cluster_count if cluster_count > 0 else 0) }}</div>
+            <div class="sub">Across {{ cluster_count }} clusters</div>
+        </div>
+        {% for vendor_name, vendor_cost in vendor_split.items() %}
+        <div class="kpi-card">
+            <div class="label">{{ vendor_name }} Spend</div>
+            <div class="value {% if 'Amazon' in vendor_name or 'AWS' in vendor_name %}orange{% elif 'Azure' in vendor_name %}blue{% elif 'GCP' in vendor_name or 'Google' in vendor_name %}green{% else %}coral{% endif %}">{{ currency(vendor_cost) }}</div>
+            <div class="sub">{{ pct(vendor_cost / total_container_spend * 100 if total_container_spend > 0 else 0) }} of total</div>
+        </div>
+        {% endfor %}
+        <div class="kpi-card">
+            <div class="label">Amortized Total</div>
+            <div class="value purple">{{ currency(top_clusters | sum(attribute='amortized_cost') if top_clusters else 0) }}</div>
+            <div class="sub">RI/SP amortized</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Top Region</div>
+            <div class="value">{{ region_split[0].region if region_split else 'N/A' }}</div>
+            <div class="sub">{{ currency(region_split[0].cost) if region_split else '$0' }}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">GPU Utilization</div>
+            <div class="value coral">{{ currency(kubecost_clusters | sum(attribute='gpuCost') if kubecost_clusters else 0) }}</div>
+            <div class="sub">Total GPU cost across clusters</div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-box">
+            <h3>Cost Distribution</h3>
+            <canvas id="costDistDonut" width="280" height="280"></canvas>
+        </div>
+        <div class="chart-box">
+            <h3>Cluster Count by Vendor</h3>
+            <canvas id="clusterCountVendorBar"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+// Data passed from Python
+const vendorSplit = {{ vendor_split | tojson }};
+const regionSplit = {{ region_split | tojson }};
+const kubecostClusters = {{ kubecost_clusters | tojson }};
+const topClusters = {{ top_clusters | tojson }};
+
+// Color map
+const vendorColors = {
+    'Amazon': '#ff9900',
+    'AWS': '#ff9900',
+    'OCI': '#ff4444',
+    'Oracle': '#ff4444',
+    'Azure': '#0078d4',
+    'Microsoft': '#0078d4',
+    'GCP': '#34a853',
+    'Google': '#34a853'
+};
+const IDLE_COLOR = '#ff6b6b';
+const UTILIZED_COLOR = '#64ffda';
+
+function getVendorColor(name) {
+    for (const [key, color] of Object.entries(vendorColors)) {
+        if (name.includes(key)) return color;
+    }
+    return '#888';
+}
+
+// ===== OVERVIEW TAB =====
+
+// Vendor Donut
+(function() {
+    const labels = Object.keys(vendorSplit);
+    const data = Object.values(vendorSplit);
+    const colors = labels.map(l => getVendorColor(l));
+
+    new Chart(document.getElementById('vendorDonut'), {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderWidth: 0,
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: false,
+            cutout: '65%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ctx.label + ': ' + fmtCurrency(ctx.parsed)
+                    }
+                }
+            }
+        }
+    });
+
+    // Build legend
+    const legendEl = document.getElementById('vendorLegend');
+    labels.forEach((l, i) => {
+        const item = document.createElement('div');
+        item.className = 'vendor-legend-item';
+        item.innerHTML = `<span class="dot" style="background:${colors[i]}"></span>${l}: ${fmtCurrency(data[i])}`;
+        legendEl.appendChild(item);
+    });
+})();
+
+// Region Bar
+(function() {
+    const sorted = [...regionSplit].sort((a, b) => b.cost - a.cost).slice(0, 15);
+    new Chart(document.getElementById('regionBar'), {
+        type: 'bar',
+        data: {
+            labels: sorted.map(r => r.region),
+            datasets: [{
+                label: 'Cost',
+                data: sorted.map(r => r.cost),
+                backgroundColor: 'rgba(100,255,218,0.6)',
+                borderRadius: 4,
+                barThickness: 18
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => fmtCurrency(ctx.parsed.x) } }
+            },
+            scales: {
+                x: { ticks: { callback: v => fmtCurrency(v) }, grid: { display: false } },
+                y: { grid: { display: false } }
+            }
+        }
+    });
+})();
+
+// Kubecost Stacked Bar
+(function() {
+    const clusterNames = kubecostClusters.map(c => c.name);
+    new Chart(document.getElementById('kubecostStacked'), {
+        type: 'bar',
+        data: {
+            labels: clusterNames,
+            datasets: [
+                { label: 'CPU', data: kubecostClusters.map(c => c.cpuCost), backgroundColor: '#48c6ef' },
+                { label: 'RAM', data: kubecostClusters.map(c => c.ramCost), backgroundColor: '#a855f7' },
+                { label: 'GPU', data: kubecostClusters.map(c => c.gpuCost), backgroundColor: '#ff9900' },
+                { label: 'Network', data: kubecostClusters.map(c => c.networkCost), backgroundColor: '#34a853' },
+                { label: 'PV', data: kubecostClusters.map(c => c.pvCost), backgroundColor: '#6366f1' }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'top', labels: { boxWidth: 12, padding: 15 } },
+                tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtCurrency(ctx.parsed.y) } }
+            },
+            scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: { stacked: true, ticks: { callback: v => fmtCurrency(v) } }
+            }
+        }
+    });
+})();
+
+// ===== TOP CLUSTERS TAB =====
+(function() {
+    const sorted = [...topClusters].sort((a, b) => b.unblended_cost - a.unblended_cost).slice(0, 20);
+    new Chart(document.getElementById('topClustersBar'), {
+        type: 'bar',
+        data: {
+            labels: sorted.map(c => c.name),
+            datasets: [{
+                label: 'Unblended Cost',
+                data: sorted.map(c => c.unblended_cost),
+                backgroundColor: sorted.map(c => getVendorColor(c.vendor)),
+                borderRadius: 4,
+                barThickness: 16
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => ctx.raw !== undefined ? fmtCurrency(ctx.raw) : '' } }
+            },
+            scales: {
+                x: { ticks: { callback: v => fmtCurrency(v) }, grid: { display: false } },
+                y: { grid: { display: false } }
+            }
+        }
+    });
+})();
+
+// ===== OPTIMIZATION TAB =====
+
+// Idle vs Utilized stacked bar
+(function() {
+    const names = kubecostClusters.map(c => c.name);
+    const idleCosts = kubecostClusters.map(c => c.totalCost * c.totalIdlePct / 100);
+    const utilCosts = kubecostClusters.map(c => c.totalCost * (1 - c.totalIdlePct / 100));
+
+    new Chart(document.getElementById('idleUtilizedBar'), {
+        type: 'bar',
+        data: {
+            labels: names,
+            datasets: [
+                { label: 'Utilized', data: utilCosts, backgroundColor: UTILIZED_COLOR },
+                { label: 'Idle', data: idleCosts, backgroundColor: IDLE_COLOR }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'top', labels: { boxWidth: 12 } },
+                tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtCurrency(ctx.parsed.y) } }
+            },
+            scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: { stacked: true, ticks: { callback: v => fmtCurrency(v) } }
+            }
+        }
+    });
+})();
+
+// Efficiency bar chart
+(function() {
+    const sorted = [...kubecostClusters].sort((a, b) => a.efficiency - b.efficiency);
+    new Chart(document.getElementById('efficiencyBar'), {
+        type: 'bar',
+        data: {
+            labels: sorted.map(c => c.name),
+            datasets: [{
+                label: 'Efficiency',
+                data: sorted.map(c => (c.efficiency * 100).toFixed(1)),
+                backgroundColor: sorted.map(c => c.efficiency >= 0.6 ? UTILIZED_COLOR : IDLE_COLOR),
+                borderRadius: 4,
+                barThickness: 18
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => ctx.parsed.x + '%' } }
+            },
+            scales: {
+                x: { max: 100, ticks: { callback: v => v + '%' }, grid: { display: false } },
+                y: { grid: { display: false } }
+            }
+        }
+    });
+})();
+
+// ===== KPIs TAB =====
+
+// Cost Distribution Donut
+(function() {
+    const cpuTotal = kubecostClusters.reduce((s, c) => s + c.cpuCost, 0);
+    const ramTotal = kubecostClusters.reduce((s, c) => s + c.ramCost, 0);
+    const gpuTotal = kubecostClusters.reduce((s, c) => s + c.gpuCost, 0);
+    const netTotal = kubecostClusters.reduce((s, c) => s + c.networkCost, 0);
+    const pvTotal = kubecostClusters.reduce((s, c) => s + c.pvCost, 0);
+
+    new Chart(document.getElementById('costDistDonut'), {
+        type: 'doughnut',
+        data: {
+            labels: ['CPU', 'RAM', 'GPU', 'Network', 'PV'],
+            datasets: [{
+                data: [cpuTotal, ramTotal, gpuTotal, netTotal, pvTotal],
+                backgroundColor: ['#48c6ef', '#a855f7', '#ff9900', '#34a853', '#6366f1'],
+                borderWidth: 0,
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '60%',
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
+                tooltip: { callbacks: { label: ctx => ctx.label + ': ' + fmtCurrency(ctx.parsed) } }
+            }
+        }
+    });
+})();
+
+// Cluster Count by Vendor bar
+(function() {
+    const vendorCounts = {};
+    topClusters.forEach(c => {
+        let v = c.vendor;
+        if (v.includes('Amazon') || v.includes('AWS')) v = 'AWS';
+        else if (v.includes('OCI') || v.includes('Oracle')) v = 'OCI';
+        else if (v.includes('Azure') || v.includes('Microsoft')) v = 'Azure';
+        else if (v.includes('GCP') || v.includes('Google')) v = 'GCP';
+        vendorCounts[v] = (vendorCounts[v] || 0) + 1;
+    });
+
+    const labels = Object.keys(vendorCounts);
+    const data = Object.values(vendorCounts);
+    const colors = labels.map(l => getVendorColor(l));
+
+    new Chart(document.getElementById('clusterCountVendorBar'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Clusters',
+                data: data,
+                backgroundColor: colors,
+                borderRadius: 6,
+                barThickness: 40
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' clusters' } }
+            },
+            scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { display: false } }
+            }
+        }
+    });
+})();
+{% endblock %}
