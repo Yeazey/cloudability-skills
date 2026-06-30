@@ -21,19 +21,16 @@ When working on any Cloudability feature, consider how it fits into the Agentic 
 
 ### Slack Integration (VALIDATED ✅)
 
-- **Workspace**: Seto Cloudability Integrations (`YOUR_SLACK_WORKSPACE.slack.com`)
-- **Bot user**: `cloudability_alerts` (User ID: `YOUR_SLACK_USER_ID`, Bot ID: `YOUR_SLACK_BOT_ID`)
-- **Channel**: `YOUR_SLACK_CHANNEL_ID` — **all FinOps posts go here**
-- **MCP Config**: `~/.kiro/settings/mcp.json` → `slack` entry
+- **Workspace**: Configured in `~/.kiro/settings/mcp.json` → `slack` entry
 - **Auth**: `SLACK_MCP_XOXB_TOKEN` env var (bot token, `xoxb-` prefix)
 - **Scopes confirmed**: `chat:write` (can post), missing `channels:read` (cannot list channels)
-- **Status**: Connected and posting successfully as of 2026-06-29
+- **Status**: Connected and posting successfully
 
 To post to Slack:
 ```bash
 SLACK_TOKEN=$(cat ~/.kiro/settings/mcp.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['mcpServers']['slack']['env']['SLACK_MCP_XOXB_TOKEN'])")
 curl -s -X POST -H "Authorization: Bearer $SLACK_TOKEN" -H "Content-Type: application/json" \
-  -d '{"channel":"YOUR_SLACK_CHANNEL_ID","text":"message here"}' \
+  -d '{"channel":"YOUR_CHANNEL_ID","text":"message here"}' \
   "https://slack.com/api/chat.postMessage"
 ```
 
@@ -45,7 +42,7 @@ Read `/Users/kingyeazey/.kiro/skills/cldy/ARCHITECTURE.md` for design decisions,
 
 ### 1. `cldy-mcp-local` — **PRIMARY** ⭐
 - **Binary**: `/Users/kingyeazey/.local/bin/cldy-mcp-local`
-- **Package**: `cldy_mcp_local-0.2.0` (installed via `uv tool install` from `~/Downloads/cldy-mcp-local/`)
+- **Package**: `cldy_mcp_local-0.2.0` (installed via `uv tool install`)
 - **Runtime**: Python (FastMCP)
 - **Config**: `~/.kiro/settings/mcp.json` → `cldy-mcp-local` entry
 - **Auth env vars**: `CLOUDABILITY_OPEN_TOKEN`, `CLOUDABILITY_ENVIRONMENT_ID`
@@ -64,35 +61,24 @@ Read `/Users/kingyeazey/.kiro/skills/cldy/ARCHITECTURE.md` for design decisions,
   - `list_tag_mappings` — Tag normalization rules
   - `search_dimension_values` — Dimension value lookup for filters
   - `list_cost_measures` / `list_usage_measures` — Available dimensions and metrics
-- **Why primary**: Unified server covering ALL Cloudability domains including Kubecost container allocation. Replaces both the Node.js and Python MCP servers for day-to-day queries.
+- **Why primary**: Unified server covering ALL Cloudability domains including Kubecost container allocation.
 
 ### 2. Node.js MCP — `cloudability` (legacy, still available)
-- **Path**: `/Users/kingyeazey/Projects/bob/cldy-mcp-server-main/`
 - **Runtime**: Node.js
 - **Covers**: Cost reporting, views, budgets, anomalies, business mappings, rightsizing, forecasts, estimates, account groups, users
-- **Config**: `~/.kiro/settings/mcp.json` → `cloudability` entry
-- **Key tools**: `cldy_cost_report_run`, `cldy_cost_report_enqueue`, `list_views`, `list_budgets`, `cldy_anomalies_list`, `cldy_rightsizing_list`, `cldy_forecast_get`
-- **Note**: No longer required for dashboard generation. Only kept for reference. Use `cldy-mcp-local` for all interactive queries.
+- **Note**: No longer required for dashboard generation. Use `cldy-mcp-local` for all interactive queries.
 
 ### 3. Python MCP — `cloudability-containers` (legacy, limited)
-- **Path**: `/Users/kingyeazey/Projects/bob/cloudability-mcp-server-python/`
 - **Runtime**: Python 3.14+ via `uv`
 - **Covers**: Budget management, account listing, estimates, forecasts
-- **Config**: `~/.kiro/settings/mcp.json` → `cloudability-containers` entry
-- **Note**: The container-specific endpoints (clusters, usage, labels) are **410 Gone**. Use `cldy-mcp-local` `get_kubecost_workload_costs` for container data instead.
+- **Note**: The container-specific endpoints are **410 Gone**. Use `cldy-mcp-local` instead.
 
 ## Environments
 
-Reference doc: `/Users/kingyeazey/cloudability-env-keys.md`
-
-| Environment | Env ID | Status | Notes |
-|-------------|--------|--------|-------|
-| **AthenaHealth** | `YOUR_ENVIRONMENT_ID` | **Active** | Current environment |
-| **cldydemo.main** | `YOUR_ENVIRONMENT_ID` | Inactive | Full demo data, 50+ K8s clusters, multi-cloud |
-| **mhmmercy.com** | `YOUR_ENVIRONMENT_ID` | Inactive | Azure-only, no container provisioning |
+Managed locally in `~/cloudability-env-keys.md`. Never commit env IDs or tokens to this repo.
 
 ### To Switch Environments
-1. Update `CLOUDABILITY_OPEN_TOKEN` and `CLOUDABILITY_ENVIRONMENT_ID` in `~/.kiro/settings/mcp.json` (all MCP entries: `cldy-mcp-local`, `cloudability`, and `cloudability-containers`)
+1. Update `CLOUDABILITY_OPEN_TOKEN` and `CLOUDABILITY_ENVIRONMENT_ID` in `~/.kiro/settings/mcp.json` (all MCP entries)
 2. Update `~/cloudability-env-keys.md` to mark active env
 3. Restart Kiro CLI
 
@@ -107,10 +93,6 @@ Reference doc: `/Users/kingyeazey/cloudability-env-keys.md`
 |------|------|-----------|
 | `Yeazey/cloudability-skills` | All Kiro skills (cldy, execdash, archdash, containersdash, dailycheckin, sprintplan) | `~/.kiro/skills/` |
 | `Yeazey/cloudability-dashboards` | Unified Python dashboard generators | `~/cloudability-dashboards/` |
-| `Yeazey/executive_cloud_summary_CLDYMCP` | Executive dashboard project (legacy Node.js) | `~/cloudability-executive-dashboard/` |
-| `Yeazey/Arch_Dash_CLDYMCP` | Multi-cloud architecture dashboard project (legacy Node.js) | `~/cloudability-multicloud-dashboard/` |
-| `Yeazey/kubernetes-container-cost-dashboard` | Container cost dashboard + HTML | `~/container-dashboard.html` |
-| `Yeazey/FinOps_Checkin_CLDYMCP` | Daily check-in multi-agent project (legacy Node.js) | `~/cloudability-dailycheckin/` |
 
 ## Available Skills (5)
 
@@ -137,7 +119,6 @@ Reference doc: `/Users/kingyeazey/cloudability-env-keys.md`
   - `cldy-dash containers` — Kubernetes container cost dashboard (HTML)
   - `cldy-dash checkin [--json]` — Daily FinOps standup (markdown/JSON to stdout)
   - `cldy-dash sprintplan [--json]` — Sprint plan generator (markdown/JSON to stdout)
-- **Replaces**: All legacy Node.js dashboard projects
 
 ### 1. Sprint Planning Skill (`/sprintplan`)
 
@@ -150,49 +131,26 @@ Reference doc: `/Users/kingyeazey/cloudability-env-keys.md`
 - **CLI**: `cd ~/cloudability-dashboards && uv run cldy-dash sprintplan --json`
 
 ### 2. Executive Dashboard (`/execdash`)
-
-> **Uses unified project** at `~/cloudability-dashboards/`
-
-- **Run**: `cd ~/cloudability-dashboards && uv run cldy-dash executive`
-- **Output**: `output/executive_dashboard.html` → auto-opens in Chrome
 - **Tabs**: 📊 Overview | 🔧 Services | ⚡ Optimization | 📈 Trends
 - **What it shows**: MTD spend, MoM trends, top accounts, services breakdown, rightsizing savings, anomalies, budgets, commitment coverage
 
 ### 3. Multi-Cloud Architecture Dashboard (`/archdash`)
-
-> **Uses unified project** at `~/cloudability-dashboards/`
-
-- **Run**: `cd ~/cloudability-dashboards && uv run cldy-dash multicloud`
-- **Output**: `output/multicloud_dashboard.html`
 - **Tabs**: ☁️ Providers | 🔧 Service Types | 🧮 Chip Architecture
-- **What it shows**: Cloud provider breakdown, IaaS/PaaS/Containers/AI classification, chip architecture (Intel/AMD/Graviton/NVIDIA)
+- **What it shows**: Cloud provider breakdown, IaaS/PaaS/Containers/AI classification, chip architecture
 
 ### 4. Container Cost Dashboard (`/containersdash`)
-
-> **Uses unified project** at `~/cloudability-dashboards/`
-
-- **Run**: `cd ~/cloudability-dashboards && uv run cldy-dash containers`
-- **Output**: `output/container_dashboard.html`
 - **Tabs**: 📊 Overview | 🏗️ Top Clusters | 📦 Namespaces | ⚡ Optimization | 📈 KPIs
-- **What it shows**: Kubecost allocation, billing costs, idle analysis, vendor/region split, weekly trend, namespace breakdown, efficiency metrics
+- **What it shows**: Kubecost allocation, billing costs, idle analysis, vendor/region split, weekly trend, namespace breakdown
 
 ### 5. Daily Check-in (`/dailycheckin`)
-
-> **Uses unified project** at `~/cloudability-dashboards/`
-
-- **Run**: `cd ~/cloudability-dashboards && uv run cldy-dash checkin --json`
-- **What it produces**: Multi-agent FinOps standup report with priority actions, spend snapshot, provider breakdown, anomaly triage, rightsizing pipeline, budget health
+- **What it produces**: Multi-agent FinOps standup report with priority actions, spend snapshot, anomaly triage, rightsizing pipeline, budget health
 
 ## Container Data Strategy
 
-The Cloudability container endpoints (`/containers/clusters`, `/containers/usage`, etc.) are **deprecated (410 Gone)**. Use `cldy-mcp-local` for all container cost queries:
+Use `cldy-mcp-local` for all container cost queries:
 
-1. **Kubecost allocation** (`cldy-mcp-local`): Use `get_kubecost_workload_costs` with aggregate dimensions (cluster, namespace, pod, node, label, controller). Supports time windows like "7d", "30d", "month", "lastmonth". Returns fairshare-allocated costs with idle/efficiency metrics.
-2. **Standard cost reports** (`cldy-mcp-local`): Use `run_cost_report` with `container_cluster_name` and `container_namespace` dimensions for billing-reconciled costs. The "IDLE RESOURCES" namespace represents idle cost.
-
-**Rule of thumb**:
-- Use `get_kubecost_workload_costs` for workload attribution, team chargeback, efficiency analysis, pod/label-level breakdowns
-- Use `run_cost_report` with container dimensions for billing reconciliation, idle analysis, cluster-level totals
+1. **Kubecost allocation**: `get_kubecost_workload_costs` — fairshare-allocated costs with idle/efficiency metrics
+2. **Standard cost reports**: `run_cost_report` with `container_cluster_name` and `container_namespace` dimensions
 
 ## Cost Report Quick Reference
 
@@ -205,25 +163,20 @@ The Cloudability container endpoints (`/containers/clusters`, `/containers/usage
 ### Filter Syntax
 `filters: ["dimension_name==value"]` — operators: `==`, `!=`, `>`, `<`, `>=`, `<=`
 
-### Key View
-- Product Hierarchy view ID: `1706692` (used by executive dashboard)
-
 ## Workflow Patterns
 
 ### End-of-Session Checklist
-After any session that modifies the Cloudability system:
 1. **Update SKILL.md** — If new tools, environments, projects, or workflows were added
 2. **Update env-keys doc** — If tokens or environment IDs changed (`~/cloudability-env-keys.md`)
 3. **Push to GitHub** — `Yeazey/cloudability-skills` and `Yeazey/cloudability-dashboards`
-4. **Commit skill changes** — If SKILL.md changed, note it for the user
+4. **⚠️ Never push env IDs, tokens, or secrets to GitHub** — keep those in local files only
 
 ### Standard Workflows
-1. **Quick cost check**: Use `run_cost_report` (cldy-mcp-local) with dimensions/metrics
-2. **Container analysis**: Use `get_kubecost_workload_costs` (cldy-mcp-local) for fairshare/workload costs, or `run_cost_report` with `container_cluster_name`/`container_namespace` for billing costs
-3. **Dashboard generation**: `cldy-dash {executive|multicloud|containers|checkin|sprintplan}` — unified Python CLI
-4. **Anomaly investigation**: `list_anomalies` (cldy-mcp-local) with date range and optional filters
-5. **Rightsizing**: `get_rightsizing_recommendations` (cldy-mcp-local) for multi-vendor recommendations
-6. **RI analysis**: `get_ri_portfolio_summary`, `list_ri_recommendations`, `get_ri_utilization` (cldy-mcp-local)
-7. **Data freshness**: `get_data_freshness_summary`, `get_pipeline_failures` (cldy-mcp-local)
-8. **Sprint planning**: `/sprintplan` skill or `cldy-dash sprintplan --json` for data collection
-9. **New dashboard/tool**: Build it → create a skill → push to GitHub → update this doc
+1. **Quick cost check**: Use `run_cost_report` with dimensions/metrics
+2. **Container analysis**: `get_kubecost_workload_costs` or `run_cost_report` with container dimensions
+3. **Dashboard generation**: `cldy-dash {executive|multicloud|containers|checkin|sprintplan}`
+4. **Anomaly investigation**: `list_anomalies` with date range and optional filters
+5. **Rightsizing**: `get_rightsizing_recommendations` for multi-vendor recommendations
+6. **RI analysis**: `get_ri_portfolio_summary`, `list_ri_recommendations`, `get_ri_utilization`
+7. **Data freshness**: `get_data_freshness_summary`, `get_pipeline_failures`
+8. **Sprint planning**: `/sprintplan` skill or `cldy-dash sprintplan --json`
