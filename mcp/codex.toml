@@ -1,0 +1,11 @@
+# Codex CLI MCP config — merge into ~/.codex/config.toml
+# Codex reads AGENTS.md at the repo root automatically; this adds live
+# Cloudability data via the cldy-mcp-local MCP server.
+
+[mcp_servers.cldy-mcp-local]
+command = "cldy-mcp-local"
+args = []
+
+[mcp_servers.cldy-mcp-local.env]
+CLOUDABILITY_OPEN_TOKEN = "your-opentoken"
+CLOUDABILITY_ENVIRONMENT_ID = "your-env-id"

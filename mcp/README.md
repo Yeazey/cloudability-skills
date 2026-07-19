@@ -19,6 +19,7 @@ Drop-in configs for connecting `cldy-mcp-local` (Cloudability MCP server) to you
 
 | Tool | Config File | Copy To |
 |------|-------------|---------|
+| OpenAI Codex | `codex.toml` | `~/.codex/config.toml` (merge `mcp_servers` block) |
 | Kiro CLI | `kiro.json` | `~/.kiro/settings/mcp.json` |
 | Claude Code | `claude.json` | `~/.claude/settings.json` (merge mcpServers block) |
 | IBM Bob | `bob.json` | Bob Settings → MCP → Add Server (use values from JSON) |

@@ -7,6 +7,7 @@ One repo, any AI tool. Dashboard generators + MCP integration for IBM Cloudabili
 | Tool | How | Setup |
 |------|-----|-------|
 | **Any agent** (28+ tools) | Reads `AGENTS.md` at root | Just clone the repo |
+| **OpenAI Codex** | `AGENTS.md` (read natively) + MCP config | Copy `mcp/codex.toml` into `~/.codex/config.toml` |
 | **IBM Bob** | `.bob/skills/` + `.bob/rules/` | Clone → open in Bob → skills auto-load |
 | **Claude Code** | `CLAUDE.md` + MCP config | See `mcp/claude.json` |
 | **Kiro CLI** | `skills/` → copy to `~/.kiro/skills/` | See Kiro section below |
